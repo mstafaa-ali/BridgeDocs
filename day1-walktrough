@@ -1,0 +1,172 @@
+# 📖 BridgeDocs — Daily Progress Log
+
+> This document tracks everything that happens each day so you can review, learn, and understand every decision made in this project.
+
+---
+
+# Day 1 — Foundation & Setup (May 1, 2026)
+
+## 🎯 Goal
+Get the entire development environment running: Docker containers, FastAPI backend, Next.js frontend — all connected and verified.
+
+---
+
+## 📁 What We Built — File by File
+
+### `docker-compose.yml` — Infrastructure as Code
+```yaml
+services:
+  postgres:    # Our relational database (users, documents, conversations)
+    image: postgres:15
+    ports: "5433:5432"   # ⚠️ Using 5433 because your PC already has PostgreSQL on 5432
+
+  chromadb:    # Our vector database (stores PDF embeddings for RAG search)
+    image: chromadb/chroma:latest
+    ports: "8001:8000"
+```
+
+**Why Docker?** Instead of installing PostgreSQL and ChromaDB manually, Docker runs them in isolated containers. One command (`docker-compose up -d`) starts everything. When you're done, `docker-compose down` stops everything cleanly.
+
+**Lesson Learned:** Your PC already had PostgreSQL installed on port 5432. Two programs can't share the same port, so we mapped Docker's PostgreSQL to port **5433** instead.
+
+---
+
+### `backend/database.py` — Database Connection
+
+```python
+engine = create_engine(DATABASE_URL)        # Creates a connection "pool" to PostgreSQL
+SessionLocal = sessionmaker(bind=engine)    # Creates database sessions for each request
+Base = declarative_base()                    # Base class that all our models inherit from
+
+def get_db():                                # FastAPI "dependency injection" — gives each
+    db = SessionLocal()                      # API endpoint a fresh database session
+    try:
+        yield db
+    finally:
+        db.close()                           # Always closes the connection when done
+```
+
+**Key Concept — Dependency Injection:** FastAPI uses `Depends(get_db)` to automatically provide a database session to any endpoint that needs one. You don't manually create/close connections — FastAPI handles it.
+
+---
+
+### `backend/models.py` — Database Tables (SQLAlchemy ORM)
+
+We defined 4 tables that map to Python classes:
+
+| Table | Purpose | Key Fields |
+|-------|---------|------------|
+| **User** | Registered accounts | `email`, `password_hash`, `full_name` |
+| **Document** | Uploaded PDFs | `title`, `file_path`, `status` (processing/ready/failed) |
+| **Conversation** | Chat sessions per document | `document_id`, `user_id`, `title` |
+| **Message** | Individual chat messages | `role` (user/assistant), `content`, `sources` |
+
+**Key Concept — ORM (Object-Relational Mapping):** Instead of writing raw SQL like `INSERT INTO users (email, password) VALUES (...)`, we write Python:
+```python
+user = User(email="ali@example.com", password_hash="...")
+db.add(user)
+db.commit()
+```
+SQLAlchemy automatically translates this to SQL. This is safer (prevents SQL injection) and more readable.
+
+**Why UUIDs instead of auto-increment IDs?** UUIDs (`550e8400-e29b-41d4-a716-446655440000`) are globally unique and don't reveal how many users you have. Auto-increment IDs (1, 2, 3...) leak information and are predictable.
+
+---
+
+### `backend/schemas.py` — Request/Response Validation (Pydantic)
+
+Pydantic schemas define what data goes **in** and **out** of each API endpoint:
+
+```python
+class UserRegister(BaseModel):     # What the frontend SENDS to register
+    email: EmailStr                # Must be a valid email format
+    password: str
+    full_name: Optional[str]
+
+class UserResponse(BaseModel):     # What the API SENDS BACK (never includes password!)
+    id: UUID
+    email: str
+    full_name: Optional[str]
+    created_at: datetime
+```
+
+**Key Concept — Why separate schemas from models?**
+- **Models** = database structure (includes `password_hash`, internal fields)
+- **Schemas** = API contract (never exposes sensitive fields like passwords)
+
+This is a security best practice. You never accidentally leak a password hash in an API response.
+
+---
+
+### `backend/main.py` — FastAPI Application Entry Point
+
+```python
+app = FastAPI(title="BridgeDocs API", version="0.1.0")
+
+# CORS: Allows the frontend (localhost:3000) to call the backend (localhost:8000)
+app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:3000"], ...)
+
+# Auto-creates all database tables on startup
+Base.metadata.create_all(bind=engine)
+```
+
+**Key Concept — CORS:** Browsers block requests between different origins (ports count as different). Without CORS middleware, your Next.js frontend on `:3000` would be blocked from calling FastAPI on `:8000`.
+
+---
+
+### `frontend/` — Next.js 16 + Tailwind CSS + Shadcn/UI
+
+Created using:
+```bash
+npx create-next-app@latest ./frontend --typescript --tailwind --app --src-dir
+npx shadcn@latest init -d
+```
+
+**Why Shadcn/UI?** It's not a component library you install — it copies component source code directly into your project. This means you have full control to customize every button, input, and dialog. Companies like Vercel and Linear use this pattern.
+
+---
+
+## 🔧 Problems Solved
+
+| Problem | Cause | Solution |
+|---------|-------|----------|
+| `pip install` failed | ChromaDB required `fastapi==0.115.9`, we pinned `0.115.12` | Changed from exact versions (`==`) to minimum versions (`>=`) |
+| FastAPI couldn't connect to PostgreSQL | Local PostgreSQL on port 5432 conflicted with Docker | Changed Docker to port **5433** |
+| Docker wouldn't start | Docker Desktop wasn't running | Launched Docker Desktop first |
+
+---
+
+## ✅ End of Day Status
+
+| Service | URL | Status |
+|---------|-----|--------|
+| PostgreSQL | `localhost:5433` | ✅ Running (Docker) |
+| ChromaDB | `localhost:8001` | ✅ Running (Docker) |
+| FastAPI Backend | `http://localhost:8000/docs` | ✅ Running |
+| Next.js Frontend | `http://localhost:3000` | ✅ Running |
+
+**API test result:**
+```json
+{
+    "app": "BridgeDocs API",
+    "version": "0.1.0",
+    "status": "running",
+    "docs": "/docs"
+}
+```
+
+---
+
+## 📚 Concepts Introduced Today
+1. **Docker Compose** — Define infrastructure in a YAML file
+2. **SQLAlchemy ORM** — Python classes that map to database tables
+3. **Pydantic Schemas** — Type-safe request/response validation
+4. **Dependency Injection** — FastAPI auto-provides database sessions
+5. **CORS** — Cross-origin security for frontend ↔ backend communication
+6. **UUID primary keys** — Secure, non-sequential identifiers
+
+---
+---
+
+# Day 2 — Backend: Database + Auth
+*In progress...*

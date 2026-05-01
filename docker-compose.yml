@@ -1,0 +1,24 @@
+services:
+  postgres:
+    image: postgres:15
+    container_name: bridgedocs-postgres
+    environment:
+      POSTGRES_DB: bridgedocs
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: bridgedocs_secret
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: bridgedocs-chromadb
+    ports:
+      - "8001:8000"
+    volumes:
+      - chroma_data:/chroma/chroma
+
+volumes:
+  postgres_data:
+  chroma_data:
