@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 import os
 
 from database import engine, Base
+from routers.auth import router as auth_router
 
 # Load environment variables
 load_dotenv()
@@ -29,6 +30,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ── Routers ──────────────────────────────────────────────────────────────
+app.include_router(auth_router)
 
 
 @app.get("/")
